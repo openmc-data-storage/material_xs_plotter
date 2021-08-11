@@ -5,6 +5,9 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_daq as daq
 from options import element_names, reaction_names
+import openmc
+from openmc.data import REACTION_MT
+from openmc.data.reaction import REACTION_NAME
 
 app = dash.Dash(__name__)
 
@@ -20,6 +23,7 @@ app.layout = html.Div([
         ),
         dcc.Input(
             id='fraction_value',
+            placeholder='Mass fraction',
             value='',
             type='number',
             style={'padding': 10},
@@ -58,6 +62,7 @@ app.layout = html.Div([
     ),
     dcc.Input(
         id='density_value',
+        placeholder='density in g/cm3',
         value='',
         type='number',
         style={'padding': 10},
@@ -83,17 +88,95 @@ app.layout = html.Div([
     [
         Input("update_plot", "n_clicks"),
         Input("reaction_names", "value"),
-        # Input("density_value", "value"),
+        Input("adding-rows-table", "data"),
+        Input("density_value", "value"),
         # Input("adding-rows-table", "rows"),
     ],
     # [dash.dependencies.Input('update_plot', 'n_clicks')],
     # [dash.dependencies.State('input-on-submit', 'value')]
     )
-def update_output(n_clicks, value):
+def update_output(n_clicks, reaction_names, rows, density_value):
     if n_clicks is None:
         raise dash.exceptions.PreventUpdate
     if n_clicks > 0:
-        print('got here')
+        trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+        if trigger_id == "update_plot":
+
+            print('reaction_names', reaction_names)
+            print('rows', rows)
+            print('density_value', density_value)
+
+            my_mat = openmc.Material(name='my_mat')
+
+            for entry in rows:
+                # for key, values in entry.items():
+                print(entry)
+                # print('key',key, 'values',values)
+
+                my_mat.add_element(
+                    entry['Elements'],
+                    entry['Fractions'],
+                    percent_type='ao'
+                )
+                
+            my_mat.set_density('g/cm3', density_value)
+
+            energy, xs_data_set = openmc.calculate_cexs(
+                my_mat,
+                'material',
+                reaction_names
+            )
+
+            all_x_y_data = []
+
+            for xs_data, reaction_name in zip(xs_data_set, reaction_names):
+                all_x_y_data.append(
+                    {
+                        "y": xs_data,
+                        "x": energy,
+                        "type": "scatter",
+                        "name": f'MT {reaction_name}'
+                        # "marker": {"color": colors},
+                    }
+                )
+            energy_units = 'eV'
+            xs_units = 'Macroscopic cross section $m^-1$'
+            return [
+                dcc.Graph(
+                    config=dict(showSendToCloud=True),
+                    figure={
+                        "data": all_x_y_data,
+                        "layout": {
+                            "height":800,
+                            # "width":1600,
+                            "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
+                            "xaxis": {
+                                "title": {"text": f"Energy {energy_units}"},
+                                # "type": xaxis_scale,
+                                "type": 'log',
+                                "tickformat": ".1e",
+                                "tickangle": 45,
+                            },
+                            "yaxis": {
+                                "automargin": True,
+                                # "title": {"text": f"Cross Section {xs_units}"},
+                                "title": {"text": xs_units},
+                                "type": 'log',
+                                # "type": yaxis_scale,
+                                "tickformat": ".1e",
+                            },
+                            "showlegend": True,
+                            # "height": 250,
+                            # "margin": {"t": 10, "l": 10, "r": 10},
+                        },
+                    },
+                )
+            ]
+
+
+        # print('energy',energy)
+        # print('xs_data',xs_data)
 
 @app.callback(
     Output('adding-rows-table', 'data'),
@@ -141,6 +224,43 @@ def add_row(n_clicks, rows, element_name, fraction_value):
 #             'x': [c['name'] for c in columns]
 #         }]
 #     }
+
+
+# def create_material_plot(materials, reaction):
+
+#     if reaction not in REACTION_MT.keys():
+#         print('Reaction not found, only these reactions are accepted', REACTION_MT.keys())
+#         return None
+
+#     # fig = create_plotly_figure(y_axis_label='Macroscopic Cross Section (1/cm)')
+
+#     # if isinstance(reaction, str):
+#     #     REACTION_NUMBER = dict(zip(REACTION_NAME.values(), REACTION_NAME.keys()))
+#     #     MT_number = REACTION_NUMBER[reaction]
+#     # else:
+#     #     MT_number = reaction
+#     #     reaction = REACTION_NAME[MT_number]
+
+#     # if not isinstance(materials, list):
+#     #     materials = [materials]
+
+#     # for material in materials:
+#         # extracts energy and cross section for the material for the provided MT reaction mumber
+#         energy, xs_data = openmc.calculate_cexs(
+#             material,
+#             'material',
+#             [MT_number])
+
+#         # adds the energy dependnat cross sction to the plot
+#         fig.add_trace(go.Scatter(
+#             x=energy,
+#             y=xs_data[0],
+#             mode='lines',
+#             name=material.name + ' ' + reaction)
+#         )
+
+#     return fig
+
 
 
 if __name__ == '__main__':

@@ -12,14 +12,16 @@
 FROM ghcr.io/openmc-data-storage/nuclear_data_base_docker:h5_base
 
 
-RUN pip3 install streamlit
-RUN pip3 install plotly
+# RUN pip3 install streamlit
+# RUN pip3 install plotly
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
 
 ENV OPENMC_CROSS_SECTIONS=/tendl-2019-hdf5/cross_sections.xml
-COPY index.py .
+COPY app.py .
 
 EXPOSE 8080
 
-ENTRYPOINT ["streamlit", "run", "index.py"]
-
+ENTRYPOINT ["python", "app.py"]
