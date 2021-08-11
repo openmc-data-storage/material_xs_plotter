@@ -11,6 +11,10 @@ from openmc.data.reaction import REACTION_NAME
 
 app = dash.Dash(__name__)
 
+
+server = app.server
+
+
 app.layout = html.Div([
     html.Div([
         dcc.Dropdown(
