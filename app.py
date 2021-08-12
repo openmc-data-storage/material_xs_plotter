@@ -47,69 +47,165 @@ app.description = "Plot neutron cross sections. Nuclear data from the TENDL libr
 server = app.server
 
 
-app.layout = html.Div(
-    [
-    html.Table(
-        [
-            html.Tr(
-                [
-                    html.Th(
-                        dcc.Dropdown(
-                            # id='demo-dropdown',
-                            options=element_names,
-                            placeholder="Select an element...",
-                            style={"width": 200, "display": "inline-block"},
-                            # labelStyle={"display": "inline-block"}
-                            id="element_name",
-                            # style={"height": 50}
-                        ),
-                    ),
-                    html.Th(
-                        dcc.Input(
-                            id="fraction_value",
-                            placeholder="Mass fraction",
-                            value="",
-                            type="number",
-                            style={"padding": 10},
-                            min=0,
-                            max=1,
-                            step=0.01,
-                            # style={"height": 50}
-                        ),
-                    ),
-                    html.Th(
-                        html.Button(
-                            "Add Element",
-                            id="editing-rows-button",
-                            n_clicks=0,
-                            style={"height": 40, "width":200}
-                        ),
-                    ),
-                ]
-            ),
-        ],
-        style={"width": "100%"},
+components = [
+    html.Title("xsplot.com material cross section plotting"),
+    html.Iframe(
+        src="https://ghbtns.com/github-btn.html?user=openmc-data-storage&repo=material_xs_plotter&type=star&count=true&size=large",
+        width="170",
+        height="30",
+        title="GitHub",
+        style={"border": 0, "scrolling": "0"},
     ),
-        # style={},
-        # style={"height": 50, "text-align": "center"},
+    html.H1(
+        "XSPlot - Neutron cross section plotter for materials",
+        # TODO find a nicer font
+        # style={'font-family': 'Times New Roman, Times, serif'},
+        # style={'font-family': 'Georgia, serif'},
+        style={"text-align": "center"},
+    ),
+    html.Div(
+        html.Iframe(
+            src="https://www.youtube.com/embed/Rhb0Oqm29B8",
+            width="560",
+            height="315",
+            title="Tutorial video",
+            # style={},
+            style={"text-align": "center", "border": 0, "scrolling": "0"},
+        ),
+        style={"text-align": "center"},
+    ),
+    html.Div(
+        html.H3(
+            [
+                "Build up a collection of elements and fractions into a material. ",
+                'Then specify the material density and reactions of interest and click "Update plot" to produce the plot. '
+                "MT reaction numbers can be found ", html.A("here", href="https://t2.lanl.gov/nis/endf/mts.html"),
+            ]
+        ),
+        id="heading2",
+    ),
+    html.Div(
+        [
+        html.Table(
+            [
+                html.Tr(
+                    [
+                        html.Th(
+                            dcc.Dropdown(
+                                # id='demo-dropdown',
+                                options=element_names,
+                                placeholder="Select an element...",
+                                style={"width": 200, "display": "inline-block"},
+                                # labelStyle={"display": "inline-block"}
+                                id="element_name",
+                                # style={"height": 50}
+                            ),
+                        ),
+                        html.Th(
+                            dcc.Input(
+                                id="fraction_value",
+                                placeholder="Mass fraction",
+                                value="",
+                                type="number",
+                                style={"padding": 10},
+                                min=0,
+                                # max=1,
+                                step=0.01,
+                                # style={"height": 50}
+                            ),
+                        ),
+                        html.Th(
+                            html.Button(
+                                "Add Element",
+                                id="editing-rows-button",
+                                n_clicks=0,
+                                style={"height": 40, "width":200}
+                            ),
+                        ),
+                    ]
+                ),
+            ],
+            style={"width": "100%"},
+        ),
+            # style={},
+            # style={"height": 50, "text-align": "center"},
 
-    html.Br(),
-    dash_table.DataTable(
-        id="adding-rows-table",
-        style_cell={'textAlign': 'center'},
-        columns=[
-            {
-                "name": "Elements",
-                "id": "Elements",
-            },
-            {
-                "name": "Fractions",
-                "id": "Fractions",
-            },
-        ],
-        data=[],
-        editable=True,
-        row_deletable=True,
+        html.Br(),
+        dash_table.DataTable(
+            id="adding-rows-table",
+            columns=[
+                {
+                    "name": "Elements",
+                    "id": "Elements",
+                },
+                {
+                    "name": "Fractions",
+                    "id": "Fractions",
+                },
+            ],
+            data=[],
+            editable=True,
+            row_deletable=True,
+            style_cell={'textAlign': 'center', 'fontSize':16, 'font-family':'sans-serif'},
+        ),
+        html.Br(),
+        html.Table(
+            [
+                html.Tr(
+                    [
+                        html.Th(
+                            dcc.Input(
+                                id="density_value",
+                                placeholder="density in g/cm3",
+                                value="",
+                                type="number",
+                                style={"padding": 10},
+                                min=0,
+                                step=0.01,
+                            ),
+                        ),
+                        html.Th(
+                            dcc.RadioItems(
+                                options=[
+                                    {"label": "atom percent", "value": "ao"},
+                                    {"label": "weight percent", "value": "wo"},
+                                ],
+                                value="ao",
+                                id="fraction_type",
+                                labelStyle={"display": "inline-block"},
+                            ),
+                        ),
+                        html.Th(
+                            dcc.Dropdown(
+                                # id='demo-dropdown',
+                                options=reaction_names,
+                                placeholder="Select reaction(s) to plot",
+                                style={"width": 400, "display": "inline-block"},
+                                # labelStyle={"display": "inline-block"}
+                                id="reaction_names",
+                                multi=True,
+                            ),
+                        ),
+                    ]
+                )
+            ],
+            style={"width": "100%"},
+        ),
+        html.Br(),
+        # html.Div(
+        #     [
+        #         html.Button(
+        #             "Plot material",
+        #             id="update_plot",
+        #             title="Click to create or refresh the plot",
+        #             style={"height": 40, "width":200}
+        #         ),
+        #     ],
+        #     style={"height": 50, "text-align": "center"},
+        # ),
+        # dcc.Graph(id='graph-container')
+        html.Div(id="graph_container"),
+    ]
     ),
     html.Br(),
     html.Table(
@@ -117,69 +213,130 @@ app.layout = html.Div(
             html.Tr(
                 [
                     html.Th(
-                        dcc.Input(
-                            id="density_value",
-                            placeholder="density in g/cm3",
-                            value="",
-                            type="number",
-                            style={"padding": 10},
-                            min=0,
-                            step=0.01,
+                        dcc.RadioItems(
+                            options=[
+                                {"label": "log X axis", "value": "log"},
+                                {"label": "linear X axis", "value": "linear"},
+                            ],
+                            value="log",
+                            id="xaxis_scale",
+                            labelStyle={"display": "inline-block"},
                         ),
                     ),
                     html.Th(
-                        dcc.Dropdown(
-                            # id='demo-dropdown',
-                            options=reaction_names,
-                            placeholder="Select reaction(s) to plot",
-                            style={"width": 400, "display": "inline-block"},
-                            # labelStyle={"display": "inline-block"}
-                            id="reaction_names",
-                            multi=True,
-                        ),
+                        # html.Button(
+                        #     "Download Plotted Data",
+                        #     title="Download a text file of the data in JSON format",
+                        #     id="btn_download2",
+                        # )
                     ),
+                    html.Th(
+                        dcc.RadioItems(
+                            options=[
+                                {"label": "log Y axis", "value": "log"},
+                                {"label": "linear y axis", "value": "linear"},
+                            ],
+                            value="log",
+                            id="yaxis_scale",
+                            labelStyle={"display": "inline-block"},
+                        ),
+                    )
                 ]
             )
         ],
         style={"width": "100%"},
     ),
+
+    html.Br(),
     html.Br(),
     html.Div(
         [
-            html.Button(
-                "Plot material",
-                id="update_plot",
-                title="Click to create or refresh the plot",
-                style={"height": 40, "width":200}
-            ),
+            html.Label("XSPlot is an open-source project powered by "),
+            html.A("OpenMC", href="https://docs.openmc.org/en/stable/"),
+            html.Label(", "),
+            html.A(" Plotly", href="https://plotly.com/"),
+            html.Label(", "),
+            html.A(" Dash", href="https://dash.plotly.com/"),
+            html.Label(", "),
+            html.A(" Dash datatable", href="https://dash.plotly.com/datatable"),
+            html.Label(", "),
+            html.A(" Flask", href="https://flask.palletsprojects.com/en/2.0.x/"),
+            html.Label(", "),
+            html.A(" Gunicorn", href="https://gunicorn.org/"),
+            html.Label(", "),
+            html.A(" Docker", href="https://www.docker.com"),
+            html.Label(", "),
+            html.A(" GCloud", href="https://cloud.google.com"),
+            html.Label(", "),
+            html.A(" Python", href="https://www.python.org/"),
+            html.Label(" with the source code available on "),
+            html.A(" GitHub", href="https://github.com/openmc-data-storage"),
         ],
-        style={"height": 50, "text-align": "center"},
+        style={"text-align": "center"},
     ),
-    # dcc.Graph(id='graph-container')
-    html.Div(id="graph_container"),
+    html.Br(),
+    html.Div(
+        [
+            html.Label("Links to alternative cross section plotting websites: "),
+            html.A("NEA JANIS", href="https://www.oecd-nea.org/jcms/pl_39910/janis"),
+            html.Label(", "),
+            html.A(" IAEA ENDF", href="https://www-nds.iaea.org/exfor/endf.htm"),
+            html.Label(", "),
+            html.A(" NNDC Sigma", href="https://www.nndc.bnl.gov/sigma/"),
+            html.Label(", "),
+            html.A(
+                " Nuclear Data Center JAEA",
+                href="https://wwwndc.jaea.go.jp/ENDF_Graph/",
+            ),
+            html.Label(", "),
+            html.A("T2 LANL", href="https://t2.lanl.gov/nis/data/endf/index.html"),
+            html.Label(", "),
+            html.A("Nuclear Data Center KAERI", href="https://atom.kaeri.re.kr"),
+        ],
+        style={"text-align": "center"},
+    ),
 ]
-)
 
+app.layout = html.Div(components)
 
 @app.callback(
     dash.dependencies.Output("graph_container", "children"),
     [
-        Input("update_plot", "n_clicks"),
+        # Input("update_plot", "n_clicks"),
         Input("reaction_names", "value"),
         Input("adding-rows-table", "data"),
         Input("density_value", "value"),
+        Input("fraction_type", "value"),
+        Input("xaxis_scale", "value"),
+        Input("yaxis_scale", "value"),
+        
         # Input("adding-rows-table", "rows"),
     ],
     # [dash.dependencies.Input('update_plot', 'n_clicks')],
     # [dash.dependencies.State('input-on-submit', 'value')]
 )
-def update_output(n_clicks, reaction_names, rows, density_value):
-    if n_clicks is None:
-        raise dash.exceptions.PreventUpdate
-    if n_clicks > 0:
-        trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+# def update_output(n_clicks, reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
+def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
+    # if n_clicks is None:
+    #     raise dash.exceptions.PreventUpdate
+    # if n_clicks > 0:
+        # trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
 
-        if trigger_id == "update_plot":
+        # if trigger_id == "update_plot":
+
+    if (reaction_names != None) and (rows != None) and (density_value != None):
+        
+        no_density = html.H4(
+            'Specify a density in g/cm3',
+            style={"text-align": "center", "color": "red"},
+        )
+        if  density_value == None:
+            return no_density
+        elif  density_value == 0:
+            return no_density
+        elif  density_value == '':
+            return no_density
+        else:
 
             print("reaction_names", reaction_names)
             print("rows", rows)
@@ -193,7 +350,7 @@ def update_output(n_clicks, reaction_names, rows, density_value):
                 # print('key',key, 'values',values)
 
                 my_mat.add_element(
-                    entry["Elements"], entry["Fractions"], percent_type="ao"
+                    entry["Elements"], entry["Fractions"], percent_type=fraction_type
                 )
 
             my_mat.set_density("g/cm3", density_value)
@@ -215,7 +372,7 @@ def update_output(n_clicks, reaction_names, rows, density_value):
                     }
                 )
             energy_units = "eV"
-            xs_units = "Macroscopic cross section $m^-1$"
+            xs_units = "Macroscopic cross section [1/cm]"
             return [
                 dcc.Graph(
                     config=dict(showSendToCloud=True),
@@ -227,8 +384,8 @@ def update_output(n_clicks, reaction_names, rows, density_value):
                             "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
                             "xaxis": {
                                 "title": {"text": f"Energy {energy_units}"},
-                                # "type": xaxis_scale,
-                                "type": "log",
+                                "type": xaxis_scale,
+                                # "type": "log",
                                 "tickformat": ".1e",
                                 "tickangle": 45,
                             },
@@ -236,8 +393,8 @@ def update_output(n_clicks, reaction_names, rows, density_value):
                                 "automargin": True,
                                 # "title": {"text": f"Cross Section {xs_units}"},
                                 "title": {"text": xs_units},
-                                "type": "log",
-                                # "type": yaxis_scale,
+                                # "type": "log",
+                                "type": yaxis_scale,
                                 "tickformat": ".1e",
                             },
                             "showlegend": True,
@@ -247,9 +404,13 @@ def update_output(n_clicks, reaction_names, rows, density_value):
                     },
                 )
             ]
+        # else:
+        #     raise dash.exceptions.PreventUpdate
+    else:
+        raise dash.exceptions.PreventUpdate
 
-        # print('energy',energy)
-        # print('xs_data',xs_data)
+    # print('energy',energy)
+    # print('xs_data',xs_data)
 
 
 @app.callback(
@@ -264,7 +425,7 @@ def add_row(n_clicks, rows, element_name, fraction_value):
         if element_name == None:
             print("no elements selected")
             return rows
-        if fraction_value == "":
+        if fraction_value == "" or fraction_value == 0:
             print("no fraction_value provided")
             return rows
         rows.append({"Elements": element_name, "Fractions": fraction_value})
