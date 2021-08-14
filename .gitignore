@@ -1,2 +1,5 @@
 
 __pycache__/
+
+# the isotopes in the cross sections
+*.json
