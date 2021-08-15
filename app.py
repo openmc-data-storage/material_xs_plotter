@@ -26,7 +26,7 @@ app = dash.Dash(
             "content": "Online graph plotting tool for neutron macroscopic cross sections of materials",
         },
         {
-            "name": "keywrds",
+            "name": "keywords",
             "keywords": "plot neutron nuclear cross section energy barns database plotter",
         },
         {
@@ -47,7 +47,7 @@ app = dash.Dash(
         }
     ],
 )
-app.title = "XSPlot neutron cross section plotter"
+app.title = "XSPlot \U0001f4c9 neutron cross section plotter \U0001f4c8"
 app.description = "Plot neutron cross sections. Nuclear data from the TENDL library."
 
 
