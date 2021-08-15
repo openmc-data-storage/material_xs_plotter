@@ -6,18 +6,20 @@
 # docker run --network host -t material_xs_plotter
 
 
-
 FROM ghcr.io/openmc-data-storage/nuclear_data_base_docker:h5_base
-
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 RUN pip install gunicorn==20.0.4
 
+# finds the 
 ENV OPENMC_CROSS_SECTIONS=/TENDL-2019/cross_sections.xml
+COPY find_dropdown_options.py .
+RUN python find_dropdown_options.py
+
 # COPY assets assets
-COPY options.py .
+COPY reactions.py .
 COPY app.py .
 
 ENV PORT 8080

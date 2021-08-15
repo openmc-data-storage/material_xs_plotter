@@ -4,10 +4,14 @@ import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_daq as daq
-from options import element_names, reaction_names
+from reactions import reaction_names
 import openmc
 from openmc.data import REACTION_MT
 from openmc.data.reaction import REACTION_NAME
+import json
+
+with open('options.json') as json_file:
+    element_names = json.load(json_file)
 
 app = dash.Dash(
     __name__,
@@ -37,6 +41,10 @@ app = dash.Dash(
             "name": "viewport",
             "content": "width=device-width, initial-scale=1.0"
         },
+        {
+            "name": "charset",
+            "content": "UTF-8"
+        }
     ],
 )
 app.title = "XSPlot neutron cross section plotter"
@@ -74,16 +82,31 @@ components = [
         ),
         style={"text-align": "center"},
     ),
-    html.Div(
+    html.Div([
         html.H3(
             [
-                "Build up a collection of elements and fractions into a material. ",
-                'Then specify the material density and reactions of interest and click "Update plot" to produce the plot. '
-                "MT reaction numbers can be found ", html.A("here", href="https://t2.lanl.gov/nis/endf/mts.html"),
+                "First select an element or isotope \U0001f449 then specficy a fraction \U0001f449 then add the element / isotope to the material table" 
             ]
         ),
+        html.H3(
+            [
+                "Continue adding elements / isotopes to the table to build up a material  \U0000267b"
+            ]
+        ),
+        html.H3(
+            [
+                'Finally specify the material density \U0001f449 then selection reactions of interest ',  html.A("[reaction descriptions \U0001f517]", href="https://t2.lanl.gov/nis/endf/mts.html")
+            ]
+        ),
+        html.H3(
+            [
+                '\U0001f4c8 The plot should update automatically \U0001f389'
+            ]
+        ),
+        ],
         id="heading2",
     ),
+    html.Br(),
     html.Div(
         [
         html.Table(
@@ -94,8 +117,8 @@ components = [
                             dcc.Dropdown(
                                 # id='demo-dropdown',
                                 options=element_names,
-                                placeholder="Select an element...",
-                                style={"width": 200, "display": "inline-block"},
+                                placeholder="Select an element / isotope ...",
+                                style={"width": 250, "display": "inline-block"},
                                 # labelStyle={"display": "inline-block"}
                                 id="element_name",
                                 # style={"height": 50}
@@ -116,7 +139,7 @@ components = [
                         ),
                         html.Th(
                             html.Button(
-                                "Add Element",
+                                "Add Element / Isotope",
                                 id="editing-rows-button",
                                 n_clicks=0,
                                 style={"height": 40, "width":200}
@@ -135,7 +158,7 @@ components = [
             id="adding-rows-table",
             columns=[
                 {
-                    "name": "Elements",
+                    "name": "Elements / Isotopes",
                     "id": "Elements",
                 },
                 {
@@ -338,79 +361,78 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
             return no_density
         else:
 
-            print("reaction_names", reaction_names)
-            print("rows", rows)
-            print("density_value", density_value)
-
             my_mat = openmc.Material(name="my_mat")
 
             for entry in rows:
-                # for key, values in entry.items():
-                print(entry)
-                # print('key',key, 'values',values)
-
-                my_mat.add_element(
-                    entry["Elements"], entry["Fractions"], percent_type=fraction_type
-                )
+                if entry["Elements"][-1].isdigit():
+                    my_mat.add_nuclide(
+                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                    )
+                else:
+                    my_mat.add_element(
+                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                    )
 
             my_mat.set_density("g/cm3", density_value)
-
-            energy, xs_data_set = openmc.calculate_cexs(
-                my_mat, "material", reaction_names
-            )
-
-            all_x_y_data = []
-
-            for xs_data, reaction_name in zip(xs_data_set, reaction_names):
-                all_x_y_data.append(
-                    {
-                        "y": xs_data,
-                        "x": energy,
-                        "type": "scatter",
-                        "name": f"MT {reaction_name}"
-                        # "marker": {"color": colors},
-                    }
+            if len(my_mat.nuclides) == 0:
+                no_elements = html.H4(
+                    'No elements or isotopes added',
+                    style={"text-align": "center", "color": "red"},
                 )
-            energy_units = "eV"
-            xs_units = "Macroscopic cross section [1/cm]"
-            return [
-                dcc.Graph(
-                    config=dict(showSendToCloud=True),
-                    figure={
-                        "data": all_x_y_data,
-                        "layout": {
-                            "height": 800,
-                            # "width":1600,
-                            "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
-                            "xaxis": {
-                                "title": {"text": f"Energy {energy_units}"},
-                                "type": xaxis_scale,
-                                # "type": "log",
-                                "tickformat": ".1e",
-                                "tickangle": 45,
+                return no_elements
+                # raise dash.exceptions.PreventUpdate
+            else:
+                energy, xs_data_set = openmc.calculate_cexs(
+                    my_mat, "material", reaction_names
+                )
+
+                all_x_y_data = []
+
+                for xs_data, reaction_name in zip(xs_data_set, reaction_names):
+                    all_x_y_data.append(
+                        {
+                            "y": xs_data,
+                            "x": energy,
+                            "type": "scatter",
+                            "name": f"MT {reaction_name}"
+                            # "marker": {"color": colors},
+                        }
+                    )
+                energy_units = "eV"
+                xs_units = "Macroscopic cross section [1/cm]"
+                return [
+                    dcc.Graph(
+                        config=dict(showSendToCloud=True),
+                        figure={
+                            "data": all_x_y_data,
+                            "layout": {
+                                "height": 800,
+                                # "width":1600,
+                                "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
+                                "xaxis": {
+                                    "title": {"text": f"Energy {energy_units}"},
+                                    "type": xaxis_scale,
+                                    # "type": "log",
+                                    "tickformat": ".1e",
+                                    "tickangle": 45,
+                                },
+                                "yaxis": {
+                                    "automargin": True,
+                                    # "title": {"text": f"Cross Section {xs_units}"},
+                                    "title": {"text": xs_units},
+                                    # "type": "log",
+                                    "type": yaxis_scale,
+                                    "tickformat": ".1e",
+                                },
+                                "showlegend": True,
+                                # "height": 250,
+                                # "margin": {"t": 10, "l": 10, "r": 10},
                             },
-                            "yaxis": {
-                                "automargin": True,
-                                # "title": {"text": f"Cross Section {xs_units}"},
-                                "title": {"text": xs_units},
-                                # "type": "log",
-                                "type": yaxis_scale,
-                                "tickformat": ".1e",
-                            },
-                            "showlegend": True,
-                            # "height": 250,
-                            # "margin": {"t": 10, "l": 10, "r": 10},
                         },
-                    },
-                )
-            ]
-        # else:
-        #     raise dash.exceptions.PreventUpdate
+                    )
+                ]
     else:
         raise dash.exceptions.PreventUpdate
-
-    # print('energy',energy)
-    # print('xs_data',xs_data)
 
 
 @app.callback(
@@ -423,78 +445,13 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
 def add_row(n_clicks, rows, element_name, fraction_value):
     if n_clicks > 0:
         if element_name == None:
-            print("no elements selected")
+            # print("no elements selected")
             return rows
         if fraction_value == "" or fraction_value == 0:
-            print("no fraction_value provided")
+            # print("no fraction_value provided")
             return rows
         rows.append({"Elements": element_name, "Fractions": fraction_value})
     return rows
-
-
-# @app.callback(
-#     Output('adding-rows-table', 'columns'),
-#     Input('adding-rows-button', 'n_clicks'),
-#     State('adding-rows-name', 'value'),
-#     State('adding-rows-table', 'columns'))
-# def update_rows(n_clicks, value, existing_rows):
-#     if n_clicks > 0:
-#         existing_rows.append({
-#             'id': value, 'name': value,
-#             'renamable': True, 'deletable': True
-#         })
-#     return existing_rows
-
-
-# adapt to plot cross sections on table update
-# @app.callback(
-#     Output('adding-rows-graph', 'figure'),
-#     Input('adding-rows-table', 'data'),
-#     Input('adding-rows-table', 'columns'))
-# def display_output(rows, columns):
-#     return {
-#         'data': [{
-#             'type': 'heatmap',
-#             'z': [[row.get(c['id'], None) for c in columns] for row in rows],
-#             'x': [c['name'] for c in columns]
-#         }]
-#     }
-
-
-# def create_material_plot(materials, reaction):
-
-#     if reaction not in REACTION_MT.keys():
-#         print('Reaction not found, only these reactions are accepted', REACTION_MT.keys())
-#         return None
-
-#     # fig = create_plotly_figure(y_axis_label='Macroscopic Cross Section (1/cm)')
-
-#     # if isinstance(reaction, str):
-#     #     REACTION_NUMBER = dict(zip(REACTION_NAME.values(), REACTION_NAME.keys()))
-#     #     MT_number = REACTION_NUMBER[reaction]
-#     # else:
-#     #     MT_number = reaction
-#     #     reaction = REACTION_NAME[MT_number]
-
-#     # if not isinstance(materials, list):
-#     #     materials = [materials]
-
-#     # for material in materials:
-#         # extracts energy and cross section for the material for the provided MT reaction mumber
-#         energy, xs_data = openmc.calculate_cexs(
-#             material,
-#             'material',
-#             [MT_number])
-
-#         # adds the energy dependnat cross sction to the plot
-#         fig.add_trace(go.Scatter(
-#             x=energy,
-#             y=xs_data[0],
-#             mode='lines',
-#             name=material.name + ' ' + reaction)
-#         )
-
-#     return fig
 
 
 if __name__ == "__main__":
