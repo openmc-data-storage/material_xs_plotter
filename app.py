@@ -9,6 +9,8 @@ import openmc
 from openmc.data import REACTION_MT
 from openmc.data.reaction import REACTION_NAME
 import json
+from json import dumps
+downloaded_data = []
 
 with open('options.json') as json_file:
     element_names = json.load(json_file)
@@ -250,11 +252,11 @@ components = [
                         ),
                     ),
                     html.Th(
-                        # html.Button(
-                        #     "Download Plotted Data",
-                        #     title="Download a text file of the data in JSON format",
-                        #     id="btn_download2",
-                        # )
+                        html.Button(
+                            "Download Plotted Data",
+                            title="Download a text file of the data in JSON format",
+                            id="btn_download2",
+                        )
                     ),
                     html.Th(
                         dcc.RadioItems(
@@ -272,7 +274,7 @@ components = [
         ],
         style={"width": "100%"},
     ),
-
+    dcc.Download(id="download-text-index"),
     html.Br(),
     html.Br(),
     html.Div(
@@ -324,6 +326,41 @@ components = [
 ]
 
 app.layout = html.Div(components)
+
+
+
+# uses a trigger to identify the callback and if the button is used then jsonifys the selected data
+@app.callback(
+    Output("download-text-index", "data"),
+    [
+        Input("btn_download2", "n_clicks"),
+        # Input("datatable-interactivity", "selected_rows"),
+    ],
+)
+def func2(n_clicks):
+    trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    global downloaded_data
+
+    if trigger_id == "btn_download2":
+        if n_clicks is None:
+            raise dash.exceptions.PreventUpdate
+        else:
+            if len(downloaded_data) > 0:
+
+                plotting_data = []
+                for entry in downloaded_data:
+                    plotting_data.append(
+                        {
+                            'energy (eV)':list(entry['x']),
+                            'macroscopic cross section (1/cm)':list(entry['y']),
+                            'reaction':entry['name'],
+                        }
+                    )
+                return dict(
+                    content=dumps(plotting_data, indent=2),
+                    filename="xsplot_download.json",
+                )
 
 @app.callback(
     dash.dependencies.Output("graph_container", "children"),
@@ -389,16 +426,17 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                     my_mat, "material", reaction_names
                 )
 
-                all_x_y_data = []
+                global downloaded_data
+
+                downloaded_data = []
 
                 for xs_data, reaction_name in zip(xs_data_set, reaction_names):
-                    all_x_y_data.append(
+                    downloaded_data.append(
                         {
                             "y": xs_data,
                             "x": energy,
                             "type": "scatter",
                             "name": f"MT {reaction_name}"
-                            # "marker": {"color": colors},
                         }
                     )
                 energy_units = "eV"
@@ -407,7 +445,7 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                     dcc.Graph(
                         config=dict(showSendToCloud=True),
                         figure={
-                            "data": all_x_y_data,
+                            "data": downloaded_data,
                             "layout": {
                                 "height": 800,
                                 # "width":1600,
