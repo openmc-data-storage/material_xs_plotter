@@ -1,17 +1,20 @@
+
+from json import dumps, load
+
 import dash
-from dash.dependencies import Input, Output, State
-import dash_table
 import dash_core_components as dcc
-import dash_html_components as html
 import dash_daq as daq
+import dash_html_components as html
+import dash_table
+from dash.dependencies import Input, Output, State
+from openmc import Material, calculate_cexs
+
 from reactions import reaction_names
-import openmc
-from openmc.data import REACTION_MT
-from openmc.data.reaction import REACTION_NAME
-import json
+
+downloaded_data = []
 
 with open('options.json') as json_file:
-    element_names = json.load(json_file)
+    element_names = load(json_file)
 
 app = dash.Dash(
     __name__,
@@ -26,7 +29,7 @@ app = dash.Dash(
             "content": "Online graph plotting tool for neutron macroscopic cross sections of materials",
         },
         {
-            "name": "keywrds",
+            "name": "keywords",
             "keywords": "plot neutron nuclear cross section energy barns database plotter",
         },
         {
@@ -47,9 +50,8 @@ app = dash.Dash(
         }
     ],
 )
-app.title = "XSPlot neutron cross section plotter"
+app.title = "XSPlot \U0001f4c9 neutron cross section plotter \U0001f4c8"
 app.description = "Plot neutron cross sections. Nuclear data from the TENDL library."
-
 
 
 server = app.server
@@ -118,13 +120,10 @@ components = [
                     [
                         html.Th(
                             dcc.Dropdown(
-                                # id='demo-dropdown',
                                 options=element_names,
                                 placeholder="Select an element / isotope ...",
                                 style={"width": 250, "display": "inline-block"},
-                                # labelStyle={"display": "inline-block"}
                                 id="element_name",
-                                # style={"height": 50}
                             ),
                         ),
                         html.Th(
@@ -135,9 +134,8 @@ components = [
                                 type="number",
                                 style={"padding": 10},
                                 min=0,
-                                # max=1,
+                                # max=1,  # users might want to user percents or ratios
                                 step=0.01,
-                                # style={"height": 50}
                             ),
                         ),
                         html.Th(
@@ -153,8 +151,6 @@ components = [
             ],
             style={"width": "100%"},
         ),
-            # style={},
-            # style={"height": 50, "text-align": "center"},
 
         html.Br(),
         dash_table.DataTable(
@@ -203,11 +199,9 @@ components = [
                         ),
                         html.Th(
                             dcc.Dropdown(
-                                # id='demo-dropdown',
                                 options=reaction_names,
                                 placeholder="Select reaction(s) to plot",
                                 style={"width": 400, "display": "inline-block"},
-                                # labelStyle={"display": "inline-block"}
                                 id="reaction_names",
                                 multi=True,
                             ),
@@ -218,19 +212,6 @@ components = [
             style={"width": "100%"},
         ),
         html.Br(),
-        # html.Div(
-        #     [
-        #         html.Button(
-        #             "Plot material",
-        #             id="update_plot",
-        #             title="Click to create or refresh the plot",
-        #             style={"height": 40, "width":200}
-        #         ),
-        #     ],
-        #     style={"height": 50, "text-align": "center"},
-        # ),
-        # dcc.Graph(id='graph-container')
-        html.Div(id="graph_container"),
     ]
     ),
     html.Br(),
@@ -250,11 +231,11 @@ components = [
                         ),
                     ),
                     html.Th(
-                        # html.Button(
-                        #     "Download Plotted Data",
-                        #     title="Download a text file of the data in JSON format",
-                        #     id="btn_download2",
-                        # )
+                        html.Button(
+                            "Download Plotted Data",
+                            title="Download a text file of the data in JSON format",
+                            id="btn_download2",
+                        )
                     ),
                     html.Th(
                         dcc.RadioItems(
@@ -272,7 +253,8 @@ components = [
         ],
         style={"width": "100%"},
     ),
-
+    html.Div(id="graph_container"),
+    dcc.Download(id="download-text-index"),
     html.Br(),
     html.Br(),
     html.Div(
@@ -325,30 +307,54 @@ components = [
 
 app.layout = html.Div(components)
 
+
+
+# uses a trigger to identify the callback and if the button is used then jsonifys the selected data
+@app.callback(
+    Output("download-text-index", "data"),
+    [
+        Input("btn_download2", "n_clicks"),
+        # Input("datatable-interactivity", "selected_rows"),
+    ],
+)
+def func2(n_clicks):
+    trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    global downloaded_data
+
+    if trigger_id == "btn_download2":
+        if n_clicks is None:
+            raise dash.exceptions.PreventUpdate
+        else:
+            if len(downloaded_data) > 0:
+
+                plotting_data = []
+                for entry in downloaded_data:
+                    plotting_data.append(
+                        {
+                            'energy (eV)':list(entry['x']),
+                            'macroscopic cross section (1/cm)':list(entry['y']),
+                            'reaction':entry['name'],
+                        }
+                    )
+                return dict(
+                    content=dumps(plotting_data, indent=2),
+                    filename="xsplot_download.json",
+                )
+
 @app.callback(
     dash.dependencies.Output("graph_container", "children"),
     [
-        # Input("update_plot", "n_clicks"),
         Input("reaction_names", "value"),
         Input("adding-rows-table", "data"),
         Input("density_value", "value"),
         Input("fraction_type", "value"),
         Input("xaxis_scale", "value"),
         Input("yaxis_scale", "value"),
-        
-        # Input("adding-rows-table", "rows"),
     ],
-    # [dash.dependencies.Input('update_plot', 'n_clicks')],
-    # [dash.dependencies.State('input-on-submit', 'value')]
 )
-# def update_output(n_clicks, reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
-def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
-    # if n_clicks is None:
-    #     raise dash.exceptions.PreventUpdate
-    # if n_clicks > 0:
-        # trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
 
-        # if trigger_id == "update_plot":
+def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
 
     if (reaction_names != None) and (rows != None) and (density_value != None):
         
@@ -364,7 +370,7 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
             return no_density
         else:
 
-            my_mat = openmc.Material(name="my_mat")
+            my_mat = Material(name="my_mat")
 
             for entry in rows:
                 if entry["Elements"][-1].isdigit():
@@ -383,22 +389,22 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                     style={"text-align": "center", "color": "red"},
                 )
                 return no_elements
-                # raise dash.exceptions.PreventUpdate
             else:
-                energy, xs_data_set = openmc.calculate_cexs(
+                energy, xs_data_set = calculate_cexs(
                     my_mat, "material", reaction_names
                 )
 
-                all_x_y_data = []
+                global downloaded_data
+
+                downloaded_data = []
 
                 for xs_data, reaction_name in zip(xs_data_set, reaction_names):
-                    all_x_y_data.append(
+                    downloaded_data.append(
                         {
                             "y": xs_data,
                             "x": energy,
                             "type": "scatter",
                             "name": f"MT {reaction_name}"
-                            # "marker": {"color": colors},
                         }
                     )
                 energy_units = "eV"
@@ -407,7 +413,7 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                     dcc.Graph(
                         config=dict(showSendToCloud=True),
                         figure={
-                            "data": all_x_y_data,
+                            "data": downloaded_data,
                             "layout": {
                                 "height": 800,
                                 # "width":1600,
@@ -415,21 +421,16 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                                 "xaxis": {
                                     "title": {"text": f"Energy {energy_units}"},
                                     "type": xaxis_scale,
-                                    # "type": "log",
                                     "tickformat": ".1e",
                                     "tickangle": 45,
                                 },
                                 "yaxis": {
                                     "automargin": True,
-                                    # "title": {"text": f"Cross Section {xs_units}"},
                                     "title": {"text": xs_units},
-                                    # "type": "log",
                                     "type": yaxis_scale,
                                     "tickformat": ".1e",
                                 },
                                 "showlegend": True,
-                                # "height": 250,
-                                # "margin": {"t": 10, "l": 10, "r": 10},
                             },
                         },
                     )
@@ -448,10 +449,9 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
 def add_row(n_clicks, rows, element_name, fraction_value):
     if n_clicks > 0:
         if element_name == None:
-            # print("no elements selected")
+            # no element selected
             return rows
         if fraction_value == "" or fraction_value == 0:
-            # print("no fraction_value provided")
             return rows
         rows.append({"Elements": element_name, "Fractions": fraction_value})
     return rows
