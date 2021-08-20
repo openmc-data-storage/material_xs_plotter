@@ -8,8 +8,59 @@ import dash_html_components as html
 import dash_table
 from dash.dependencies import Input, Output, State
 from openmc import Material, calculate_cexs
-
+from header_and_footer import header, footer
 from reactions import reaction_names
+
+ATOMIC_SYMBOL = {
+    0: 'n', 1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C',
+    7: 'N', 8: 'O', 9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al',
+    14: 'Si', 15: 'P', 16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K',
+    20: 'Ca', 21: 'Sc', 22: 'Ti', 23: 'V', 24: 'Cr', 25: 'Mn',
+    26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn', 31: 'Ga',
+    32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr', 37: 'Rb',
+    38: 'Sr', 39: 'Y', 40: 'Zr', 41: 'Nb', 42: 'Mo', 43: 'Tc',
+    44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd', 49: 'In',
+    50: 'Sn', 51: 'Sb', 52: 'Te', 53: 'I', 54: 'Xe', 55: 'Cs',
+    56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm',
+    62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho',
+    68: 'Er', 69: 'Tm', 70: 'Yb', 71: 'Lu', 72: 'Hf', 73: 'Ta',
+    74: 'W', 75: 'Re', 76: 'Os', 77: 'Ir', 78: 'Pt', 79: 'Au',
+    80: 'Hg', 81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At',
+    86: 'Rn', 87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th', 91: 'Pa',
+    92: 'U', 93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk',
+    98: 'Cf', 99: 'Es', 100: 'Fm', 101: 'Md', 102: 'No',
+    103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh',
+    108: 'Hs', 109: 'Mt', 110: 'Ds', 111: 'Rg', 112: 'Cn',
+    113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts',
+    118: 'Og'
+}
+
+def zaid_to_isotope(zaid: str) -> str:
+    """converts an isotope into a zaid e.g. 003006 -> Li6"""
+    a = str(zaid)[-3:]
+    z = str(zaid)[:-3]
+    symbol = ATOMIC_SYMBOL[int(z)]
+    return symbol + str(int(a))
+
+def convert_strings_to_numbers(input_string: str) -> float:
+    """Converts a number represented as a string into a float. Handels special
+    case formatting that is used in fotran inputs"""
+
+    processed_string = input_string.split(".")
+    if len(processed_string) == 1 : # in case there is no decimal point
+        return float(input_string)
+
+    # the string is a normal number
+    if any(item in processed_string[1].lower() for item in ["e+","e", "e-"]):
+        return float(input_string)
+
+    # the string is a fortran formatted number
+    processed_string[1] = processed_string[1].replace("+","e+")
+    processed_string[1] = processed_string[1].replace("-","e-")
+    combined_string = f"{processed_string[0]}.{processed_string[1]}"
+
+    return float(combined_string)
+
 
 downloaded_data = []
 
@@ -52,260 +103,418 @@ app = dash.Dash(
 )
 app.title = "XSPlot \U0001f4c9 neutron cross section plotter \U0001f4c8"
 app.description = "Plot neutron cross sections. Nuclear data from the TENDL library."
-
+app.config['suppress_callback_exceptions'] = True
 
 server = app.server
 
 
-components = [
-    html.Title("xsplot.com material cross section plotting"),
-    html.Iframe(
-        src="https://ghbtns.com/github-btn.html?user=openmc-data-storage&repo=material_xs_plotter&type=star&count=true&size=large",
-        width="170",
-        height="30",
-        title="GitHub",
-        style={"border": 0, "scrolling": "0"},
-    ),
-    html.H1(
-        "XSPlot - Neutron cross section plotter for materials",
-        # TODO find a nicer font
-        # style={'font-family': 'Times New Roman, Times, serif'},
-        # style={'font-family': 'Georgia, serif'},
-        style={"text-align": "center"},
-    ),
-    html.Div(
-        html.Iframe(
-            src="https://www.youtube.com/embed/Rhb0Oqm29B8",
-            width="560",
-            height="315",
-            title="Tutorial video",
-            # style={},
-            style={"text-align": "center", "border": 0, "scrolling": "0"},
-        ),
-        style={"text-align": "center"},
-    ),
-    html.Div([
-        html.H3(
-            [
-                "First select an element or isotope \U0001f449 then specficy a fraction \U0001f449 then add the element / isotope to the material table" 
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                "Continue adding elements / isotopes to the table to build up a material  \U0000267b"
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                'Finally specify the material density \U0001f449 then selection reactions of interest ',  html.A("[reaction descriptions \U0001f517]", href="https://t2.lanl.gov/nis/endf/mts.html")
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                '\U0001f4c8 The plot should update automatically \U0001f389'
-            ],
-            style={'text-align': 'center'}
-        ),
-        ],
-    ),
-    html.Br(),
-    html.Div(
-        [
-        html.Table(
-            [
-                html.Tr(
-                    [
-                        html.Th(
-                            dcc.Dropdown(
-                                options=element_names,
-                                placeholder="Select an element / isotope ...",
-                                style={"width": 250, "display": "inline-block"},
-                                id="element_name",
-                            ),
-                        ),
-                        html.Th(
-                            dcc.Input(
-                                id="fraction_value",
-                                placeholder="Mass fraction",
-                                value="",
-                                type="number",
-                                style={"padding": 10},
-                                min=0,
-                                # max=1,  # users might want to user percents or ratios
-                                step=0.01,
-                            ),
-                        ),
-                        html.Th(
-                            html.Button(
-                                "Add Element / Isotope",
-                                id="editing-rows-button",
-                                n_clicks=0,
-                                style={"height": 40, "width":200}
-                            ),
-                        ),
-                    ]
-                ),
-            ],
-            style={"width": "100%"},
-        ),
+# app.layout = html.Div(components)
 
-        html.Br(),
-        dash_table.DataTable(
-            id="adding-rows-table",
-            columns=[
-                {
-                    "name": "Elements / Isotopes",
-                    "id": "Elements",
-                },
-                {
-                    "name": "Fractions",
-                    "id": "Fractions",
-                },
-            ],
-            data=[],
-            editable=True,
-            row_deletable=True,
-            style_cell={'textAlign': 'center', 'fontSize':16, 'font-family':'sans-serif'},
-        ),
-        html.Br(),
-        html.Table(
-            [
-                html.Tr(
-                    [
-                        html.Th(
-                            dcc.Input(
-                                id="density_value",
-                                placeholder="density in g/cm3",
-                                value="",
-                                type="number",
-                                style={"padding": 10},
-                                min=0,
-                                step=0.01,
-                            ),
-                        ),
-                        html.Th(
-                            dcc.RadioItems(
-                                options=[
-                                    {"label": "atom percent", "value": "ao"},
-                                    {"label": "weight percent", "value": "wo"},
-                                ],
-                                value="ao",
-                                id="fraction_type",
-                                labelStyle={"display": "inline-block"},
-                            ),
-                        ),
-                        html.Th(
-                            dcc.Dropdown(
-                                options=reaction_names,
-                                placeholder="Select reaction(s) to plot",
-                                style={"width": 400, "display": "inline-block"},
-                                id="reaction_names",
-                                multi=True,
-                            ),
-                        ),
-                    ]
-                )
-            ],
-            style={"width": "100%"},
-        ),
-        html.Br(),
-    ]
-    ),
-    html.Br(),
-    html.Table(
-        [
-            html.Tr(
+app.layout = html.Div(header + [
+    dcc.Tabs(id='tabs-example', value='tab-1', children=[
+        dcc.Tab(label='One element/isotope at a time', children= [
+            html.Div(
                 [
-                    html.Th(
-                        dcc.RadioItems(
-                            options=[
-                                {"label": "log X axis", "value": "log"},
-                                {"label": "linear X axis", "value": "linear"},
-                            ],
-                            value="log",
-                            id="xaxis_scale",
-                            labelStyle={"display": "inline-block"},
+                html.Table(
+                    [
+                        html.Tr(
+                            [
+                                html.Th(
+                                    dcc.Dropdown(
+                                        options=element_names,
+                                        placeholder="Select an element / isotope ...",
+                                        style={"width": 250, "display": "inline-block"},
+                                        id="element_name",
+                                    ),
+                                ),
+                                html.Th(
+                                    dcc.Input(
+                                        id="fraction_value",
+                                        placeholder="Mass fraction",
+                                        value="",
+                                        type="number",
+                                        style={"padding": 10},
+                                        min=0,
+                                        # max=1,  # users might want to user percents or ratios
+                                        step=0.01,
+                                    ),
+                                ),
+                                html.Th(
+                                    html.Button(
+                                        "Add Element / Isotope",
+                                        id="editing-rows-button",
+                                        n_clicks=0,
+                                        style={"height": 40, "width":200}
+                                    ),
+                                ),
+                            ]
                         ),
-                    ),
-                    html.Th(
-                        html.Button(
-                            "Download Plotted Data",
-                            title="Download a text file of the data in JSON format",
-                            id="btn_download2",
+                    ],
+                    style={"width": "100%"},
+                ),
+
+                html.Br(),
+                dash_table.DataTable(
+                    id="adding-rows-table",
+                    columns=[
+                        {
+                            "name": "Elements / Isotopes",
+                            "id": "Elements",
+                        },
+                        {
+                            "name": "Fractions",
+                            "id": "Fractions",
+                        },
+                    ],
+                    data=[],
+                    editable=True,
+                    row_deletable=True,
+                    style_cell={'textAlign': 'center', 'fontSize':16, 'font-family':'sans-serif'},
+                ),
+                html.Br(),
+                html.Table(
+                    [
+                        html.Tr(
+                            [
+                                html.Th(
+                                    dcc.Input(
+                                        id="density_value",
+                                        placeholder="density in g/cm3",
+                                        value="",
+                                        type="number",
+                                        style={"padding": 10},
+                                        min=0,
+                                        step=0.01,
+                                    ),
+                                ),
+                                html.Th(
+                                    dcc.RadioItems(
+                                        options=[
+                                            {"label": "atom percent", "value": "ao"},
+                                            {"label": "weight percent", "value": "wo"},
+                                        ],
+                                        value="ao",
+                                        id="fraction_type",
+                                        labelStyle={"display": "inline-block"},
+                                    ),
+                                ),
+                                html.Th(
+                                    dcc.Dropdown(
+                                        options=reaction_names,
+                                        placeholder="Select reaction(s) to plot",
+                                        style={"width": 400, "display": "inline-block"},
+                                        id="reaction_names",
+                                        multi=True,
+                                    ),
+                                ),
+                            ]
                         )
-                    ),
-                    html.Th(
-                        dcc.RadioItems(
-                            options=[
-                                {"label": "log Y axis", "value": "log"},
-                                {"label": "linear y axis", "value": "linear"},
-                            ],
-                            value="log",
-                            id="yaxis_scale",
-                            labelStyle={"display": "inline-block"},
+                    ],
+                    style={"width": "100%"},
+                ),
+                html.Br(),
+            ]
+            ),
+            html.Br(),
+            html.Table(
+                [
+                    html.Tr(
+                        [
+                            html.Th(
+                                dcc.RadioItems(
+                                    options=[
+                                        {"label": "log X axis", "value": "log"},
+                                        {"label": "linear X axis", "value": "linear"},
+                                    ],
+                                    value="log",
+                                    id="xaxis_scale",
+                                    labelStyle={"display": "inline-block"},
+                                ),
+                            ),
+                            html.Th(
+                                html.Button(
+                                    "Download Plotted Data",
+                                    title="Download a text file of the data in JSON format",
+                                    id="btn_download2",
+                                )
+                            ),
+                            html.Th(
+                                dcc.RadioItems(
+                                    options=[
+                                        {"label": "log Y axis", "value": "log"},
+                                        {"label": "linear y axis", "value": "linear"},
+                                    ],
+                                    value="log",
+                                    id="yaxis_scale",
+                                    labelStyle={"display": "inline-block"},
+                                ),
+                            )
+                        ]
+                    )
+                ],
+                style={"width": "100%"},
+            ),
+            html.Div(id="graph_container"),
+        ]),
+        dcc.Tab(label='From MCNP material card', value='tab-2'),
+    ]),
+    html.Div(id='tabs-example-content'),
+    dcc.Download(id="download-text-index"),
+])
+
+
+
+@app.callback(Output('tabs-example-content', 'children'),
+              Input('tabs-example', 'value'))
+def render_content(tab):
+    if tab == 'tab-2':
+        return html.Div([
+            html.Div(
+                [
+                html.Table(
+                    [
+                        html.Tr(
+                            [
+                                html.Th(
+                                    dcc.Textarea(
+                                        id="mcnp_input_text",
+                                        placeholder="Copy and paste your MCNP card here",
+                                        value="",
+                                        # type="number",
+                                        style={'width': '100%', 'height': 300},
+                                    ),
+                                ),
+                            ]
                         ),
+                    ],
+                    style={"width": "100%"},
+                ),
+
+                html.Br(),
+                html.Br(),
+                html.Table(
+                    [
+                        html.Tr(
+                            [
+                                html.Th(
+                                    dcc.Dropdown(
+                                        options=reaction_names,
+                                        placeholder="Select reaction(s) to plot",
+                                        style={"width": 400, "display": "inline-block"},
+                                        id="mcnp_reaction_names",
+                                        multi=True,
+                                    ),
+                                ),
+                            ]
+                        )
+                    ],
+                    style={"width": "100%"},
+                ),
+                html.Br(),
+            ]
+            ),
+            html.Br(),
+            html.Table(
+                [
+                    html.Tr(
+                        [
+                            html.Th(
+                                dcc.RadioItems(
+                                    options=[
+                                        {"label": "log X axis", "value": "log"},
+                                        {"label": "linear X axis", "value": "linear"},
+                                    ],
+                                    value="log",
+                                    id="mcnp_xaxis_scale",
+                                    labelStyle={"display": "inline-block"},
+                                ),
+                            ),
+                            html.Th(
+                                html.Button(
+                                    "Download Plotted Data",
+                                    title="Download a text file of the data in JSON format",
+                                    id="mcnp_btn_download2",
+                                )
+                            ),
+                            html.Th(
+                                dcc.RadioItems(
+                                    options=[
+                                        {"label": "log Y axis", "value": "log"},
+                                        {"label": "linear y axis", "value": "linear"},
+                                    ],
+                                    value="log",
+                                    id="mcnp_yaxis_scale",
+                                    labelStyle={"display": "inline-block"},
+                                ),
+                            )
+                        ]
+                    )
+                ],
+                style={"width": "100%"},
+            ),
+            html.Div(id="mcnp_graph_container"),
+        ])
+
+
+
+@app.callback(
+    dash.dependencies.Output("mcnp_graph_container", "children"),
+    [
+        Input("mcnp_reaction_names", "value"),
+        Input("mcnp_input_text", "value"),
+        Input("mcnp_xaxis_scale", "value"),
+        Input("mcnp_yaxis_scale", "value"),
+    ],
+)
+
+def update_output(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale):
+
+    """mcnp_input_text is and mcnp material card like the example below
+    M24   001001  6.66562840e-01
+            001002  1.03826667e-04
+            008016  3.32540200e-01
+            008017  1.26333333e-04
+            008018  6.66800000e-04
+    """
+
+    if (reaction_names != None):
+        no_mcnp_material_text = html.H4(
+            'Specify a material card in MCNP format',
+            style={"text-align": "center", "color": "red"},
+        )
+        if mcnp_input_text == None:
+            return no_mcnp_material_text
+        elif  mcnp_input_text == '':
+            return no_mcnp_material_text
+        else:
+
+            file_lines = mcnp_input_text.split('\n')
+            tokens = file_lines[0].split()
+            # makes the first string without the material number
+            material_string = f'{" ".join(tokens[1:])} '
+
+            # removes inline comments
+            if "$" in material_string:
+                position = material_string.find("$")
+                material_string = material_string[0:position]
+            current_line_number = 1
+
+            while True:
+                # end of the file check
+                if current_line_number == len(file_lines):
+                    break
+
+                while True:
+                    # end of the file check
+                    if (current_line_number == len(file_lines)):
+                        break
+                    line = file_lines[current_line_number]
+                    # handels mcnp continue line (which is 5 spaces)
+                    if line[:5] == "     ":
+                        # removes inline comments
+                        if "$" in line:
+                            line = line[0:line.find("$")]
+                        material_string = material_string + line
+                    else: # new cell card
+                        break
+                    # increment the line number
+                    current_line_number = current_line_number + 1
+                break
+
+            
+            # removes end of line chars and splits up
+            tokens = material_string.replace("\n","").split()
+            if len(tokens)%2 != 0:
+                print ("The material string contains an odd number of zaids "
+                       "and fractions")
+
+            zaid_fraction_dict = {}
+            while len(tokens) != 0:
+                nuclide = tokens[0].split(".")
+                isotope_name = zaid_to_isotope(nuclide[0])
+
+                fraction = convert_strings_to_numbers(tokens[1])
+                # removes two tokens from list
+                tokens.pop(0)
+                tokens.pop(0)
+                if isotope_name not in zaid_fraction_dict.keys():
+                    zaid_fraction_dict[isotope_name] = fraction
+                else:
+                    zaid_fraction_dict[isotope_name] = zaid_fraction_dict[isotope_name] + fraction
+
+            print(zaid_fraction_dict)
+            my_mat = Material(name="my_mat")
+
+            for entry in rows:
+                if entry["Elements"][-1].isdigit():
+                    my_mat.add_nuclide(
+                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                    )
+                else:
+                    my_mat.add_element(
+                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                    )
+
+            my_mat.set_density("g/cm3", density_value)
+            if len(my_mat.nuclides) == 0:
+                no_elements = html.H4(
+                    'No elements or isotopes added',
+                    style={"text-align": "center", "color": "red"},
+                )
+                return no_elements
+            else:
+                energy, xs_data_set = calculate_cexs(
+                    my_mat, "material", reaction_names
+                )
+
+                global downloaded_data
+
+                downloaded_data = []
+
+                for xs_data, reaction_name in zip(xs_data_set, reaction_names):
+                    downloaded_data.append(
+                        {
+                            "y": xs_data,
+                            "x": energy,
+                            "type": "scatter",
+                            "name": f"MT {reaction_name}"
+                        }
+                    )
+                energy_units = "eV"
+                xs_units = "Macroscopic cross section [1/cm]"
+                return [
+                    dcc.Graph(
+                        config=dict(showSendToCloud=True),
+                        figure={
+                            "data": downloaded_data,
+                            "layout": {
+                                "height": 800,
+                                # "width":1600,
+                                "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
+                                "xaxis": {
+                                    "title": {"text": f"Energy {energy_units}"},
+                                    "type": xaxis_scale,
+                                    "tickformat": ".1e",
+                                    "tickangle": 45,
+                                },
+                                "yaxis": {
+                                    "automargin": True,
+                                    "title": {"text": xs_units},
+                                    "type": yaxis_scale,
+                                    "tickformat": ".1e",
+                                },
+                                "showlegend": True,
+                            },
+                        },
                     )
                 ]
-            )
-        ],
-        style={"width": "100%"},
-    ),
-    html.Div(id="graph_container"),
-    dcc.Download(id="download-text-index"),
-    html.Br(),
-    html.Br(),
-    html.Div(
-        [
-            html.Label("XSPlot is an open-source project powered by "),
-            html.A("OpenMC", href="https://docs.openmc.org/en/stable/"),
-            html.Label(", "),
-            html.A(" Plotly", href="https://plotly.com/"),
-            html.Label(", "),
-            html.A(" Dash", href="https://dash.plotly.com/"),
-            html.Label(", "),
-            html.A(" Dash datatable", href="https://dash.plotly.com/datatable"),
-            html.Label(", "),
-            html.A(" Flask", href="https://flask.palletsprojects.com/en/2.0.x/"),
-            html.Label(", "),
-            html.A(" Gunicorn", href="https://gunicorn.org/"),
-            html.Label(", "),
-            html.A(" Docker", href="https://www.docker.com"),
-            html.Label(", "),
-            html.A(" GCloud", href="https://cloud.google.com"),
-            html.Label(", "),
-            html.A(" Python", href="https://www.python.org/"),
-            html.Label(" with the source code available on "),
-            html.A(" GitHub", href="https://github.com/openmc-data-storage"),
-        ],
-        style={"text-align": "center"},
-    ),
-    html.Br(),
-    html.Div(
-        [
-            html.Label("Links to alternative cross section plotting websites: "),
-            html.A("NEA JANIS", href="https://www.oecd-nea.org/jcms/pl_39910/janis"),
-            html.Label(", "),
-            html.A(" IAEA ENDF", href="https://www-nds.iaea.org/exfor/endf.htm"),
-            html.Label(", "),
-            html.A(" NNDC Sigma", href="https://www.nndc.bnl.gov/sigma/"),
-            html.Label(", "),
-            html.A(
-                " Nuclear Data Center JAEA",
-                href="https://wwwndc.jaea.go.jp/ENDF_Graph/",
-            ),
-            html.Label(", "),
-            html.A("T2 LANL", href="https://t2.lanl.gov/nis/data/endf/index.html"),
-            html.Label(", "),
-            html.A("Nuclear Data Center KAERI", href="https://atom.kaeri.re.kr"),
-        ],
-        style={"text-align": "center"},
-    ),
-]
+    else:
+        raise dash.exceptions.PreventUpdate
 
-app.layout = html.Div(components)
+
+
+
+
 
 
 
