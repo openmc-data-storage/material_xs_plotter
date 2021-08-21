@@ -27,34 +27,6 @@ header = [
         ),
         style={"text-align": "center"},
     ),
-    html.Div([
-        html.H3(
-            [
-                "First select an element or isotope \U0001f449 then specficy a fraction \U0001f449 then add the element / isotope to the material table" 
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                "Continue adding elements / isotopes to the table to build up a material  \U0000267b"
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                'Finally specify the material density \U0001f449 then selection reactions of interest ',  html.A("[reaction descriptions \U0001f517]", href="https://t2.lanl.gov/nis/endf/mts.html")
-            ],
-            style={'text-align': 'center'}
-        ),
-        html.H3(
-            [
-                '\U0001f4c8 The plot should update automatically \U0001f389'
-            ],
-            style={'text-align': 'center'}
-        ),
-        ],
-    ),
-    html.Br(),
 ]
 
 footer = [
@@ -92,6 +64,8 @@ footer = [
             html.A("NEA JANIS", href="https://www.oecd-nea.org/jcms/pl_39910/janis"),
             html.Label(", "),
             html.A(" IAEA ENDF", href="https://www-nds.iaea.org/exfor/endf.htm"),
+            html.Label(", "),
+            html.A(" IAEA Libraries", href="https://nds.iaea.org/dataexplorer"),
             html.Label(", "),
             html.A(" NNDC Sigma", href="https://www.nndc.bnl.gov/sigma/"),
             html.Label(", "),

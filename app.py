@@ -12,7 +12,8 @@ from header_and_footer import header, footer
 from reactions import reaction_names
 
 ATOMIC_SYMBOL = {
-    0: 'n', 1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C',
+    # 0: 'n', 
+    1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C',
     7: 'N', 8: 'O', 9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al',
     14: 'Si', 15: 'P', 16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K',
     20: 'Ca', 21: 'Sc', 22: 'Ti', 23: 'V', 24: 'Cr', 25: 'Mn',
@@ -40,7 +41,11 @@ def zaid_to_isotope(zaid: str) -> str:
     a = str(zaid)[-3:]
     z = str(zaid)[:-3]
     symbol = ATOMIC_SYMBOL[int(z)]
-    return symbol + str(int(a))
+    mass_number = str(int(a))
+    if mass_number == '0':
+        return symbol
+    else:
+        return symbol + mass_number
 
 def convert_strings_to_numbers(input_string: str) -> float:
     """Converts a number represented as a string into a float. Handels special
@@ -115,6 +120,34 @@ app.layout = html.Div(header + [
         dcc.Tab(label='One element/isotope at a time', children= [
             html.Div(
                 [
+                html.Div([
+                    html.H3(
+                        [
+                            "First select an element or isotope \U0001f449 then specficy a fraction \U0001f449 then add the element / isotope to the material table" 
+                        ],
+                        style={'text-align': 'center'}
+                    ),
+                    html.H3(
+                        [
+                            "Continue adding elements / isotopes to the table to build up a material  \U0000267b"
+                        ],
+                        style={'text-align': 'center'}
+                    ),
+                    html.H3(
+                        [
+                            'Specify the material density \U0001f449 then selection reactions of interest ',  html.A("[reaction descriptions \U0001f517]", href="https://t2.lanl.gov/nis/endf/mts.html")
+                        ],
+                        style={'text-align': 'center'}
+                    ),
+                    html.H3(
+                        [
+                            '\U0001f4c8 The plot should update automatically \U0001f389'
+                        ],
+                        style={'text-align': 'center'}
+                    ),
+                    ],
+                ),
+                html.Br(),
                 html.Table(
                     [
                         html.Tr(
@@ -254,7 +287,11 @@ app.layout = html.Div(header + [
                 ],
                 style={"width": "100%"},
             ),
-            html.Div(id="graph_container"),
+            dcc.Loading(
+                id="loading-1",
+                type="default",
+                children=html.Div(id="graph_container")
+            ),
         ]),
         dcc.Tab(label='From MCNP material card', value='tab-2'),
     ]),
@@ -269,6 +306,42 @@ app.layout = html.Div(header + [
 def render_content(tab):
     if tab == 'tab-2':
         return html.Div([
+            html.Div([
+                html.H3(
+                    [
+                        " \U00002702 Copy a material card in MCNP format" 
+                    ],
+                    style={'text-align': 'center'}
+                ),
+                html.H3(
+                    [
+                        "\U0001f4cb Paste the text into the input box bellow"
+                    ],
+                    style={'text-align': 'center'}
+                ),
+                html.H3(
+                    [
+                        'Finally specify the material density \U0001f449 then selection reactions of interest ',  html.A("[reaction descriptions \U0001f517]", href="https://t2.lanl.gov/nis/endf/mts.html")
+                    ],
+                    style={'text-align': 'center'}
+                ),
+                html.H3(
+                    [
+                        '\U0001f4c8 The plot should update automatically \U0001f389'
+                    ],
+                    style={'text-align': 'center'}
+                ),
+                html.H3(
+                    [
+                    html.Label("\U0000269b If you make MCNP materials then you might be interested in the "),
+                    html.A("neutronics material maker", href="https://docs.openmc.org/en/stable/"),
+                    html.Label(" Python \U0001f40d package"),
+                    ],
+                    style={'text-align': 'center'}
+                ),
+                ],
+            ),
+            html.Br(),
             html.Div(
                 [
                 html.Table(
@@ -278,12 +351,22 @@ def render_content(tab):
                                 html.Th(
                                     dcc.Textarea(
                                         id="mcnp_input_text",
-                                        placeholder="Copy and paste your MCNP card here",
+                                        placeholder=(
+                                            "Copy and paste your MCNP card here \n"
+                                            "\n"
+                                            "For exmple ...\n"
+                                            "\n"
+                                            "M24 001001  6.66562840e-01\n"
+                                            "    001002  1.03826667e-04\n"
+                                            "    008016  3.32540200e-01\n"
+                                            "    008017  1.26333333e-04\n"
+                                            "    008018  6.66800000e-04")
+                                        ,
                                         value="",
-                                        # type="number",
-                                        style={'width': '100%', 'height': 300},
+                                        style={'width': '50%', 'height': 300},
                                     ),
                                 ),
+                                html.Th(id='processed_input_mcnp',children=[]),
                             ]
                         ),
                     ],
@@ -296,6 +379,17 @@ def render_content(tab):
                     [
                         html.Tr(
                             [
+                                html.Th(
+                                    dcc.Input(
+                                        id="mcnp_density_value",
+                                        placeholder="density in g/cm3",
+                                        value="",
+                                        type="number",
+                                        style={"padding": 10},
+                                        min=0,
+                                        step=0.01,
+                                    ),
+                                ),
                                 html.Th(
                                     dcc.Dropdown(
                                         options=reaction_names,
@@ -352,43 +446,70 @@ def render_content(tab):
                 ],
                 style={"width": "100%"},
             ),
-            html.Div(id="mcnp_graph_container"),
+            dcc.Loading(
+                id="loading-1",
+                type="default",
+                children=html.Div(id="mcnp_graph_container")
+            ),
         ])
 
 
 
-@app.callback(
+@app.callback([
     dash.dependencies.Output("mcnp_graph_container", "children"),
+    dash.dependencies.Output("processed_input_mcnp", "children"),
+    ],
     [
         Input("mcnp_reaction_names", "value"),
         Input("mcnp_input_text", "value"),
         Input("mcnp_xaxis_scale", "value"),
         Input("mcnp_yaxis_scale", "value"),
+        Input("mcnp_density_value", "value"),
     ],
 )
 
-def update_output(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale):
+def update_graph_from_mcnp(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale, density_value):
 
     """mcnp_input_text is and mcnp material card like the example below
-    M24   001001  6.66562840e-01
-            001002  1.03826667e-04
-            008016  3.32540200e-01
-            008017  1.26333333e-04
-            008018  6.66800000e-04
+M24   001001  6.66562840e-01
+        001002  1.03826667e-04
+        008016  3.32540200e-01
+        008017  1.26333333e-04
+        008018  6.66800000e-04
     """
-
-    if (reaction_names != None):
-        no_mcnp_material_text = html.H4(
-            'Specify a material card in MCNP format',
+    no_density = html.H4(
+        'Specify a density in g/cm3',
+        style={"text-align": "center", "color": "red"},
+    )
+    no_mcnp_material_text = html.H4(
+        'Specify a material card in MCNP format',
+        style={"text-align": "center", "color": "red"},
+    )
+    no_mcnp_reaction = html.H4(
+            'Select a reaction',
             style={"text-align": "center", "color": "red"},
         )
-        if mcnp_input_text == None:
-            return no_mcnp_material_text
-        elif  mcnp_input_text == '':
-            return no_mcnp_material_text
-        else:
+
+
+    if mcnp_input_text == None:
+        return [], no_mcnp_material_text
+    elif  mcnp_input_text == '':
+        return [], no_mcnp_material_text
+    elif  density_value == None:
+        return [], no_density
+    elif  density_value == 0:
+        return [], no_density
+    elif  density_value == '':
+        return [], no_density
+    elif reaction_names == None:
+        return [], no_mcnp_reaction
+    
+    else:
+        try:
+            # inputs look ok, but if the processing fails then return error
 
             file_lines = mcnp_input_text.split('\n')
+            print('file_lines',file_lines)
             tokens = file_lines[0].split()
             # makes the first string without the material number
             material_string = f'{" ".join(tokens[1:])} '
@@ -421,13 +542,14 @@ def update_output(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale):
                     current_line_number = current_line_number + 1
                 break
 
-            
             # removes end of line chars and splits up
             tokens = material_string.replace("\n","").split()
             if len(tokens)%2 != 0:
-                print ("The material string contains an odd number of zaids "
-                       "and fractions")
-
+                html.H4(
+                    'The material string contains an odd number of zaids and fractions',
+                    style={"text-align": "center", "color": "red"},
+                )
+            print('tokens',tokens)
             zaid_fraction_dict = {}
             while len(tokens) != 0:
                 nuclide = tokens[0].split(".")
@@ -443,16 +565,23 @@ def update_output(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale):
                     zaid_fraction_dict[isotope_name] = zaid_fraction_dict[isotope_name] + fraction
 
             print(zaid_fraction_dict)
+
+            
             my_mat = Material(name="my_mat")
 
-            for entry in rows:
-                if entry["Elements"][-1].isdigit():
+            for key, entry in zaid_fraction_dict.items():
+                if entry < 0:
+                    fraction_type = 'wo'
+                else:
+                    fraction_type = 'ao'
+
+                if key[-1].isdigit():
                     my_mat.add_nuclide(
-                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                        key, entry, percent_type=fraction_type
                     )
                 else:
                     my_mat.add_element(
-                        entry["Elements"], entry["Fractions"], percent_type=fraction_type
+                        key, entry, percent_type=fraction_type
                     )
 
             my_mat.set_density("g/cm3", density_value)
@@ -461,59 +590,90 @@ def update_output(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale):
                     'No elements or isotopes added',
                     style={"text-align": "center", "color": "red"},
                 )
-                return no_elements
+                return [], no_elements
             else:
                 energy, xs_data_set = calculate_cexs(
                     my_mat, "material", reaction_names
                 )
 
-                global downloaded_data
+            global downloaded_data
 
-                downloaded_data = []
+            downloaded_data = []
 
-                for xs_data, reaction_name in zip(xs_data_set, reaction_names):
-                    downloaded_data.append(
-                        {
-                            "y": xs_data,
-                            "x": energy,
-                            "type": "scatter",
-                            "name": f"MT {reaction_name}"
-                        }
-                    )
-                energy_units = "eV"
-                xs_units = "Macroscopic cross section [1/cm]"
-                return [
-                    dcc.Graph(
-                        config=dict(showSendToCloud=True),
-                        figure={
-                            "data": downloaded_data,
-                            "layout": {
-                                "height": 800,
-                                # "width":1600,
-                                "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
-                                "xaxis": {
-                                    "title": {"text": f"Energy {energy_units}"},
-                                    "type": xaxis_scale,
-                                    "tickformat": ".1e",
-                                    "tickangle": 45,
-                                },
-                                "yaxis": {
-                                    "automargin": True,
-                                    "title": {"text": xs_units},
-                                    "type": yaxis_scale,
-                                    "tickformat": ".1e",
-                                },
-                                "showlegend": True,
+
+
+
+
+
+
+
+
+
+
+
+
+            for xs_data, reaction_name in zip(xs_data_set, reaction_names):
+                downloaded_data.append(
+                    {
+                        "y": xs_data,
+                        "x": energy,
+                        "type": "scatter",
+                        "name": f"MT {reaction_name}"
+                    }
+                )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+            energy_units = "eV"
+            xs_units = "Macroscopic cross section [1/cm]"
+            return [
+                dcc.Graph(
+                    config=dict(showSendToCloud=True),
+                    figure={
+                        "data": downloaded_data,
+                        "layout": {
+                            "height": 800,
+                            # "width":1600,
+                            "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
+                            "xaxis": {
+                                "title": {"text": f"Energy {energy_units}"},
+                                "type": xaxis_scale,
+                                "tickformat": ".1e",
+                                "tickangle": 45,
                             },
+                            "yaxis": {
+                                "automargin": True,
+                                "title": {"text": xs_units},
+                                "type": yaxis_scale,
+                                "tickformat": ".1e",
+                            },
+                            "showlegend": True,
                         },
-                    )
-                ]
-    else:
-        raise dash.exceptions.PreventUpdate
+                    },
+                )
+            ], table_of_processed
 
-
-
-
+        except:
+            return  [], html.H4(
+                'There was an error processing the MCNP material format',
+                style={"text-align": "center", "color": "red"},
+            )
 
 
 
