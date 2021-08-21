@@ -1,6 +1,6 @@
 
 from json import dumps, load
-
+from dash_table import DataTable
 import dash
 import dash_core_components as dcc
 import dash_daq as daq
@@ -10,6 +10,7 @@ from dash.dependencies import Input, Output, State
 from openmc import Material, calculate_cexs
 from header_and_footer import header, footer
 from reactions import reaction_names
+import pandas as pd
 
 ATOMIC_SYMBOL = {
     # 0: 'n', 
@@ -40,6 +41,9 @@ def zaid_to_isotope(zaid: str) -> str:
     """converts an isotope into a zaid e.g. 003006 -> Li6"""
     a = str(zaid)[-3:]
     z = str(zaid)[:-3]
+    print('a',a)
+    print('z',z)
+    print()
     symbol = ATOMIC_SYMBOL[int(z)]
     mass_number = str(int(a))
     if mass_number == '0':
@@ -350,6 +354,7 @@ def render_content(tab):
                             [
                                 html.Th(
                                     dcc.Textarea(
+                                        title='Enter the material card in MCNP format here',
                                         id="mcnp_input_text",
                                         placeholder=(
                                             "Copy and paste your MCNP card here \n"
@@ -366,7 +371,9 @@ def render_content(tab):
                                         style={'width': '50%', 'height': 300},
                                     ),
                                 ),
-                                html.Th(id='processed_input_mcnp',children=[]),
+                                html.Th(id='processed_input_mcnp',children=[],
+                                        style={'width': '50%', 'height': 300}
+                                ),
                             ]
                         ),
                     ],
@@ -471,11 +478,11 @@ def render_content(tab):
 def update_graph_from_mcnp(reaction_names, mcnp_input_text,  xaxis_scale, yaxis_scale, density_value):
 
     """mcnp_input_text is and mcnp material card like the example below
-M24   001001  6.66562840e-01
-        001002  1.03826667e-04
-        008016  3.32540200e-01
-        008017  1.26333333e-04
-        008018  6.66800000e-04
+M24  001001  6.66562840e-01
+     001002  1.03826667e-04
+     008016  3.32540200e-01
+     008017  1.26333333e-04
+     008018  6.66800000e-04
     """
     no_density = html.H4(
         'Specify a density in g/cm3',
@@ -502,6 +509,8 @@ M24   001001  6.66562840e-01
     elif  density_value == '':
         return [], no_density
     elif reaction_names == None:
+        return [], no_mcnp_reaction
+    elif reaction_names == []:
         return [], no_mcnp_reaction
     
     else:
@@ -550,7 +559,7 @@ M24   001001  6.66562840e-01
                     style={"text-align": "center", "color": "red"},
                 )
             print('tokens',tokens)
-            zaid_fraction_dict = {}
+            zaid_fraction_dict = []
             while len(tokens) != 0:
                 nuclide = tokens[0].split(".")
                 isotope_name = zaid_to_isotope(nuclide[0])
@@ -559,32 +568,47 @@ M24   001001  6.66562840e-01
                 # removes two tokens from list
                 tokens.pop(0)
                 tokens.pop(0)
-                if isotope_name not in zaid_fraction_dict.keys():
-                    zaid_fraction_dict[isotope_name] = fraction
-                else:
-                    zaid_fraction_dict[isotope_name] = zaid_fraction_dict[isotope_name] + fraction
+                zaid_fraction_dict.append({
+                    'element' : isotope_name,
+                    'fraction' : fraction
+                })
 
-            print(zaid_fraction_dict)
-
-            
             my_mat = Material(name="my_mat")
 
-            for key, entry in zaid_fraction_dict.items():
-                if entry < 0:
+            table_contents = []
+
+            for entry in zaid_fraction_dict:
+                if entry['fraction'] < 0:
                     fraction_type = 'wo'
                 else:
                     fraction_type = 'ao'
 
-                if key[-1].isdigit():
+                if entry['element'][-1].isdigit():
                     my_mat.add_nuclide(
-                        key, entry, percent_type=fraction_type
+                        entry['element'], entry['fraction'], percent_type=fraction_type
                     )
                 else:
                     my_mat.add_element(
-                        key, entry, percent_type=fraction_type
+                        entry['element'], entry['fraction'], percent_type=fraction_type
+                    )
+                table_contents.append(
+                    html.Tr(
+                            [
+                                html.Td(
+                                    html.Label(f"{entry['element']}"),
+                                    style={"width":"25%","text-align": "left"}
+                                ),
+                                html.Td(
+                                    html.Label(f"{entry['fraction']}"),
+                                    style={"width":"25%","text-align": "left"}
+                                )
+                            ]
+                        )
                     )
 
             my_mat.set_density("g/cm3", density_value)
+
+            print(my_mat)
             if len(my_mat.nuclides) == 0:
                 no_elements = html.H4(
                     'No elements or isotopes added',
@@ -600,15 +624,26 @@ M24   001001  6.66562840e-01
 
             downloaded_data = []
 
+     
 
-
-
-
-
-
-
-
-
+            table_of_processed = [html.Table(
+                [
+                #     html.Tr([
+                #         'Processed MCNP input card']),
+                # ]+[
+                    html.Tr([
+                        html.Th(
+                            'Elements / isotopes',
+                            style={"width":"25%","text-align": "left"}
+                        ),
+                        html.Th(
+                            'Fraction',
+                            style={"width":"25%","text-align": "left"}
+                        ),
+                        ]),
+                ]+table_contents,
+                style={"width": "50%"},
+            )]
 
 
 
@@ -627,19 +662,6 @@ M24   001001  6.66562840e-01
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-                
             energy_units = "eV"
             xs_units = "Macroscopic cross section [1/cm]"
             return [
