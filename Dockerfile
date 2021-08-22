@@ -13,10 +13,14 @@ RUN pip install -r requirements.txt
 
 RUN pip install gunicorn==20.0.4
 
-# finds the 
+# finds the avaialble isotopes
 ENV OPENMC_CROSS_SECTIONS=/TENDL-2019/cross_sections.xml
 COPY find_dropdown_options.py .
 RUN python find_dropdown_options.py
+
+COPY header_and_footer.py .
+COPY reactions.py .
+
 
 # COPY assets assets
 COPY reactions.py .
