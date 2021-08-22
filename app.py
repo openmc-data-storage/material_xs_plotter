@@ -9,69 +9,11 @@ import dash_table
 from dash.dependencies import Input, Output, State
 from openmc import Material, calculate_cexs
 from header_and_footer import header, footer
-from reactions import reaction_names
-import pandas as pd
-
-ATOMIC_SYMBOL = {
-    # 0: 'n', 
-    1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C',
-    7: 'N', 8: 'O', 9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al',
-    14: 'Si', 15: 'P', 16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K',
-    20: 'Ca', 21: 'Sc', 22: 'Ti', 23: 'V', 24: 'Cr', 25: 'Mn',
-    26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn', 31: 'Ga',
-    32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr', 37: 'Rb',
-    38: 'Sr', 39: 'Y', 40: 'Zr', 41: 'Nb', 42: 'Mo', 43: 'Tc',
-    44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd', 49: 'In',
-    50: 'Sn', 51: 'Sb', 52: 'Te', 53: 'I', 54: 'Xe', 55: 'Cs',
-    56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm',
-    62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho',
-    68: 'Er', 69: 'Tm', 70: 'Yb', 71: 'Lu', 72: 'Hf', 73: 'Ta',
-    74: 'W', 75: 'Re', 76: 'Os', 77: 'Ir', 78: 'Pt', 79: 'Au',
-    80: 'Hg', 81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At',
-    86: 'Rn', 87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th', 91: 'Pa',
-    92: 'U', 93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk',
-    98: 'Cf', 99: 'Es', 100: 'Fm', 101: 'Md', 102: 'No',
-    103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh',
-    108: 'Hs', 109: 'Mt', 110: 'Ds', 111: 'Rg', 112: 'Cn',
-    113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts',
-    118: 'Og'
-}
-
-def zaid_to_isotope(zaid: str) -> str:
-    """converts an isotope into a zaid e.g. 003006 -> Li6"""
-    a = str(zaid)[-3:]
-    z = str(zaid)[:-3]
-    print('a',a)
-    print('z',z)
-    print()
-    symbol = ATOMIC_SYMBOL[int(z)]
-    mass_number = str(int(a))
-    if mass_number == '0':
-        return symbol
-    else:
-        return symbol + mass_number
-
-def convert_strings_to_numbers(input_string: str) -> float:
-    """Converts a number represented as a string into a float. Handels special
-    case formatting that is used in fotran inputs"""
-
-    processed_string = input_string.split(".")
-    if len(processed_string) == 1 : # in case there is no decimal point
-        return float(input_string)
-
-    # the string is a normal number
-    if any(item in processed_string[1].lower() for item in ["e+","e", "e-"]):
-        return float(input_string)
-
-    # the string is a fortran formatted number
-    processed_string[1] = processed_string[1].replace("+","e+")
-    processed_string[1] = processed_string[1].replace("-","e-")
-    combined_string = f"{processed_string[0]}.{processed_string[1]}"
-
-    return float(combined_string)
+from reactions import reaction_names, ATOMIC_SYMBOL, convert_strings_to_numbers, zaid_to_isotope
 
 
 downloaded_data = []
+mcnp_downloaded_data = []
 
 with open('options.json') as json_file:
     element_names = load(json_file)
@@ -116,11 +58,8 @@ app.config['suppress_callback_exceptions'] = True
 
 server = app.server
 
-
-# app.layout = html.Div(components)
-
 app.layout = html.Div(header + [
-    dcc.Tabs(id='tabs-example', value='tab-1', children=[
+    dcc.Tabs(id='tabs', value='tab-1', children=[
         dcc.Tab(label='One element/isotope at a time', children= [
             html.Div(
                 [
@@ -204,7 +143,7 @@ app.layout = html.Div(header + [
                         },
                     ],
                     data=[],
-                    editable=True,
+                    editable=False,
                     row_deletable=True,
                     style_cell={'textAlign': 'center', 'fontSize':16, 'font-family':'sans-serif'},
                 ),
@@ -272,7 +211,7 @@ app.layout = html.Div(header + [
                                 html.Button(
                                     "Download Plotted Data",
                                     title="Download a text file of the data in JSON format",
-                                    id="btn_download2",
+                                    id="download_button",
                                 )
                             ),
                             html.Th(
@@ -296,17 +235,17 @@ app.layout = html.Div(header + [
                 type="default",
                 children=html.Div(id="graph_container")
             ),
-        ]),
+            dcc.Download(id="download-text"),
+        ]+footer),
         dcc.Tab(label='From MCNP material card', value='tab-2'),
     ]),
-    html.Div(id='tabs-example-content'),
-    dcc.Download(id="download-text-index"),
+    html.Div(id='tab-2-content'),
+    dcc.Download(id="download-text-mcnp"),
 ])
 
 
-
-@app.callback(Output('tabs-example-content', 'children'),
-              Input('tabs-example', 'value'))
+@app.callback(Output('tab-2-content', 'children'),
+              Input('tabs', 'value'))
 def render_content(tab):
     if tab == 'tab-2':
         return html.Div([
@@ -362,11 +301,12 @@ def render_content(tab):
                                             "For exmple ...\n"
                                             "\n"
                                             "M24 001001  6.66562840e-01\n"
-                                            "    001002  1.03826667e-04\n"
-                                            "    008016  3.32540200e-01\n"
-                                            "    008017  1.26333333e-04\n"
-                                            "    008018  6.66800000e-04")
-                                        ,
+                                            "     001002  1.03826667e-04\n"
+                                            "     008016  3.32540200e-01\n"
+                                            "     008017  1.26333333e-04\n"
+                                            "     008018  6.66800000e-04\n"
+                                            "\n"
+                                        ),
                                         value="",
                                         style={'width': '50%', 'height': 300},
                                     ),
@@ -434,7 +374,7 @@ def render_content(tab):
                                 html.Button(
                                     "Download Plotted Data",
                                     title="Download a text file of the data in JSON format",
-                                    id="mcnp_btn_download2",
+                                    id="mcnp_download_button",
                                 )
                             ),
                             html.Th(
@@ -518,7 +458,6 @@ M24  001001  6.66562840e-01
             # inputs look ok, but if the processing fails then return error
 
             file_lines = mcnp_input_text.split('\n')
-            print('file_lines',file_lines)
             tokens = file_lines[0].split()
             # makes the first string without the material number
             material_string = f'{" ".join(tokens[1:])} '
@@ -558,7 +497,6 @@ M24  001001  6.66562840e-01
                     'The material string contains an odd number of zaids and fractions',
                     style={"text-align": "center", "color": "red"},
                 )
-            print('tokens',tokens)
             zaid_fraction_dict = []
             while len(tokens) != 0:
                 nuclide = tokens[0].split(".")
@@ -608,7 +546,6 @@ M24  001001  6.66562840e-01
 
             my_mat.set_density("g/cm3", density_value)
 
-            print(my_mat)
             if len(my_mat.nuclides) == 0:
                 no_elements = html.H4(
                     'No elements or isotopes added',
@@ -620,35 +557,32 @@ M24  001001  6.66562840e-01
                     my_mat, "material", reaction_names
                 )
 
-            global downloaded_data
+            global mcnp_downloaded_data
 
-            downloaded_data = []
+            mcnp_downloaded_data = []
 
-     
-
-            table_of_processed = [html.Table(
-                [
-                #     html.Tr([
-                #         'Processed MCNP input card']),
-                # ]+[
-                    html.Tr([
-                        html.Th(
-                            'Elements / isotopes',
-                            style={"width":"25%","text-align": "left"}
+            table_of_processed = [
+                html.Table(
+                    [
+                        html.Tr([
+                            html.Th(
+                                'Elements / isotopes',
+                                style={"width":"25%","text-align": "left"}
+                            ),
+                            html.Th(
+                                'Fraction',
+                                style={"width":"25%","text-align": "left"}
+                            ),
+                            ]
                         ),
-                        html.Th(
-                            'Fraction',
-                            style={"width":"25%","text-align": "left"}
-                        ),
-                        ]),
-                ]+table_contents,
-                style={"width": "50%"},
-            )]
-
+                    ]+table_contents,
+                    style={"width": "50%"},
+                )
+            ]
 
 
             for xs_data, reaction_name in zip(xs_data_set, reaction_names):
-                downloaded_data.append(
+                mcnp_downloaded_data.append(
                     {
                         "y": xs_data,
                         "x": energy,
@@ -658,17 +592,13 @@ M24  001001  6.66562840e-01
                 )
 
 
-
-
-
-
             energy_units = "eV"
             xs_units = "Macroscopic cross section [1/cm]"
             return [
                 dcc.Graph(
                     config=dict(showSendToCloud=True),
                     figure={
-                        "data": downloaded_data,
+                        "data": mcnp_downloaded_data,
                         "layout": {
                             "height": 800,
                             # "width":1600,
@@ -698,40 +628,57 @@ M24  001001  6.66562840e-01
             )
 
 
-
+def make_download_dict(data):
+    plotting_data = []
+    for entry in data:
+        plotting_data.append(
+            {
+                'energy (eV)':list(entry['x']),
+                'macroscopic cross section (1/cm)':list(entry['y']),
+                'reaction':entry['name'],
+            }
+        )
+    return dict(
+        content=dumps(plotting_data, indent=2),
+        filename="xsplot_download.json",
+    )
 
 # uses a trigger to identify the callback and if the button is used then jsonifys the selected data
 @app.callback(
-    Output("download-text-index", "data"),
+    Output("download-text", "data"),
     [
-        Input("btn_download2", "n_clicks"),
-        # Input("datatable-interactivity", "selected_rows"),
+        Input("download_button", "n_clicks"),
     ],
 )
-def func2(n_clicks):
+def clicked_download(n_clicks):
     trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
-
-    global downloaded_data
-
-    if trigger_id == "btn_download2":
+    if trigger_id == "download_button":
         if n_clicks is None:
             raise dash.exceptions.PreventUpdate
         else:
+            global downloaded_data
             if len(downloaded_data) > 0:
+                download_dict = make_download_dict(downloaded_data)
+                return download_dict
 
-                plotting_data = []
-                for entry in downloaded_data:
-                    plotting_data.append(
-                        {
-                            'energy (eV)':list(entry['x']),
-                            'macroscopic cross section (1/cm)':list(entry['y']),
-                            'reaction':entry['name'],
-                        }
-                    )
-                return dict(
-                    content=dumps(plotting_data, indent=2),
-                    filename="xsplot_download.json",
-                )
+# uses a trigger to identify the callback and if the button is used then jsonifys the selected data
+@app.callback(
+    Output("download-text-mcnp", "data"),
+    [
+        Input("mcnp_download_button", "n_clicks"),
+    ],
+)
+def clicked_mcnp_download(n_clicks):
+    trigger_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    if trigger_id == "mcnp_download_button":
+        if n_clicks is None:
+            raise dash.exceptions.PreventUpdate
+        else:
+            global mcnp_downloaded_data
+            if len(mcnp_downloaded_data) > 0:
+                download_dict = make_download_dict(mcnp_downloaded_data)
+                return download_dict
+
 
 @app.callback(
     dash.dependencies.Output("graph_container", "children"),
@@ -744,7 +691,6 @@ def func2(n_clicks):
         Input("yaxis_scale", "value"),
     ],
 )
-
 def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_scale, yaxis_scale):
 
     if (reaction_names != None) and (rows != None) and (density_value != None):
