@@ -18,6 +18,35 @@ mcnp_downloaded_data = []
 with open('options.json') as json_file:
     element_names = load(json_file)
 
+def make_plotly_graph(downloaded_data, energy_units, xaxis_scale, xs_units, yaxis_scale):
+
+    return [
+        dcc.Graph(
+            config=dict(showSendToCloud=True),
+            figure={
+                "data": downloaded_data,
+                "layout": {
+                    "height": 800,
+                    # "width":1600,
+                    "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
+                    "xaxis": {
+                        "title": {"text": f"Energy {energy_units}"},
+                        "type": xaxis_scale,
+                        "tickformat": ".1e",
+                        "tickangle": 45,
+                    },
+                    "yaxis": {
+                        "automargin": True,
+                        "title": {"text": xs_units},
+                        "type": yaxis_scale,
+                        "tickformat": ".1e",
+                    },
+                    "showlegend": True,
+                },
+            },
+        )
+    ]
+
 app = dash.Dash(
     __name__,
     prevent_initial_callbacks=True,
@@ -594,32 +623,7 @@ M24  001001  6.66562840e-01
 
             energy_units = "eV"
             xs_units = "Macroscopic cross section [1/cm]"
-            return [
-                dcc.Graph(
-                    config=dict(showSendToCloud=True),
-                    figure={
-                        "data": mcnp_downloaded_data,
-                        "layout": {
-                            "height": 800,
-                            # "width":1600,
-                            "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
-                            "xaxis": {
-                                "title": {"text": f"Energy {energy_units}"},
-                                "type": xaxis_scale,
-                                "tickformat": ".1e",
-                                "tickangle": 45,
-                            },
-                            "yaxis": {
-                                "automargin": True,
-                                "title": {"text": xs_units},
-                                "type": yaxis_scale,
-                                "tickformat": ".1e",
-                            },
-                            "showlegend": True,
-                        },
-                    },
-                )
-            ], table_of_processed
+            return make_plotly_graph(mcnp_downloaded_data, energy_units, xaxis_scale, xs_units, yaxis_scale), table_of_processed
 
         except:
             return  [], html.H4(
@@ -746,32 +750,7 @@ def update_output(reaction_names, rows, density_value, fraction_type,  xaxis_sca
                     )
                 energy_units = "eV"
                 xs_units = "Macroscopic cross section [1/cm]"
-                return [
-                    dcc.Graph(
-                        config=dict(showSendToCloud=True),
-                        figure={
-                            "data": downloaded_data,
-                            "layout": {
-                                "height": 800,
-                                # "width":1600,
-                                "margin": {"l": 3, "r": 2, "t": 15, "b": 60},
-                                "xaxis": {
-                                    "title": {"text": f"Energy {energy_units}"},
-                                    "type": xaxis_scale,
-                                    "tickformat": ".1e",
-                                    "tickangle": 45,
-                                },
-                                "yaxis": {
-                                    "automargin": True,
-                                    "title": {"text": xs_units},
-                                    "type": yaxis_scale,
-                                    "tickformat": ".1e",
-                                },
-                                "showlegend": True,
-                            },
-                        },
-                    )
-                ]
+                return make_plotly_graph(downloaded_data, energy_units, xaxis_scale, xs_units, yaxis_scale)
     else:
         raise dash.exceptions.PreventUpdate
 
