@@ -2,3 +2,4 @@
 dash
 dash_daq
 plotly
+gunicorn==20.0.4

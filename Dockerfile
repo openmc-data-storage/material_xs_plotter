@@ -11,8 +11,6 @@ FROM ghcr.io/openmc-data-storage/nuclear_data_base_docker:h5_base
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-RUN pip install gunicorn==20.0.4
-
 # finds the avaialble isotopes
 ENV OPENMC_CROSS_SECTIONS=/TENDL-2019/cross_sections.xml
 COPY find_dropdown_options.py .
